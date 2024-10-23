@@ -6,6 +6,7 @@ const userSchema = schema({
     userName: {
         type: String,
         required: true,
+        unique: true,
         
     },
     email  : {
@@ -17,7 +18,17 @@ const userSchema = schema({
         type: String,
         required: true,
         unique: true
+    },
+    isMfaActive: {
+        type: Boolean,
+        required: false,
+        default: false
+    },
+    twoFactorSecret :{
+        type: String
     }
+}, {
+    timestamps: true,
 })
 
 module.exports = mongoose.model('User', userSchema);
