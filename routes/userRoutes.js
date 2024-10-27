@@ -6,7 +6,8 @@ const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const speakeasy = require('speakeasy');
 const qrCode = require('qrcode');
-
+const jwt = require('jsonwebtoken');
+const dotenv = require('dotenv').config();
 // most important use of passport.js is that if user is logged in successfully
 // then it returns user object with request and this req.user can be
 // used to check that user is logged in or not
@@ -144,13 +145,13 @@ router.post('/logout', async (req, res) => {
 
 })
 // Route for 2fa setup
-router.post('/2fa/setup',(req, res, next)=>{
-    if(req.isAuthenticated){
-        res.json({message: 'user is authenticated'})
-    }else{
-        res.status(404).json({message: 'User Unauthenticated'})
+router.post('/2fa/setup', (req, res, next) => {
+    if (req.isAuthenticated) {
+        res.json({ message: 'user is authenticated' })
+    } else {
+        res.status(404).json({ message: 'User Unauthenticated' })
     }
-} ,async (req, res) => {
+}, async (req, res) => {
     try {
         console.log('req.user is', req.user);
         const user = req.user;
@@ -159,15 +160,15 @@ router.post('/2fa/setup',(req, res, next)=>{
         user.twoFactorSecret = secret.base32;
         user.isMfaActive = true
         await user.save();
-        const qrImageUrl = await qrCode.toDataURl(url);
-
         const url = speakeasy.otpauthURL({
             secret: secret.base32,
-            label: req.user.username,
+            label: `${req.user.username}`,
             issuer: 'hamza.com',
             encoding: 'base32'
 
         })
+        const qrImageUrl = await qrCode.toDataURl(url);
+
 
         res.status(200).json({
             secret: secret.base32,
@@ -175,17 +176,42 @@ router.post('/2fa/setup',(req, res, next)=>{
         })
 
     } catch (error) {
-        
+        res.status(500).json({ message: "Error while setting up 2fa" })
     }
 
 })
 // Route for 2fa verify
 router.post('/2fa/verify', async (req, res) => {
+const {token} = req.body;
+const user = req.user;
+const verified = speakeasy.totp.verify({
+    secret: user.twoFactorSecret,
+    encoding: 'base32',
+    token,
+});
+if(verified){
+    const jwtToken = jwt.sign(
+        {username: user.username},
+        process.env.JWT_SECRET,
+        {expiresIn: '1hr'}
+    )
+    res.status(200).json({message: '2FA successful', token: jwtToken,})
+}else{
+    res.status(400).json({message: 'invalid token'})
+}
 
 })
 // Route for 2fa reset
 router.post('/2fa/reset', async (req, res) => {
-
+try {
+    const user = req.user;
+    user.twoFactorSecret = '';
+    user.isMfaActive = false;
+    await user.save();
+    console.log('2FA reset is  successful')
+} catch (error) {
+    
+}
 })
 
 
